@@ -21,6 +21,7 @@
 #include <chainparams.h>
 #include <interfaces/node.h>
 #include <key_io.h>
+#include <wallet/psbtwallet.h>
 #include <wallet/coincontrol.h>
 #include <ui_interface.h>
 #include <txmempool.h>
@@ -321,7 +322,8 @@ void SendCoinsDialog::on_sendButton_clicked()
 
     QString questionString = tr("Are you sure you want to send?");
     questionString.append("<br /><span style='font-size:10pt;'>");
-    questionString.append(tr("Please, review your transaction."));
+    const QString pleaseReview = model->privateKeysDisabled() ? tr("Please, review your transaction proposal.") : tr("Please, review your transaction.");
+    questionString.append(pleaseReview);
     questionString.append("</span>%1");
 
     if(txFee > 0)
@@ -373,7 +375,8 @@ void SendCoinsDialog::on_sendButton_clicked()
         questionString = questionString.arg("<br /><br />" + formatted.at(0));
     }
 
-    SendConfirmationDialog confirmationDialog(tr("Confirm send coins"), questionString, informative_text, detailed_text, SEND_CONFIRM_DELAY, this);
+    const QString confirmation = model->privateKeysDisabled() ? tr("Confirm transaction proposal") : tr("Confirm send coins");
+    SendConfirmationDialog confirmationDialog(confirmation, questionString, informative_text, detailed_text, SEND_CONFIRM_DELAY, this);
     confirmationDialog.exec();
     QMessageBox::StandardButton retval = static_cast<QMessageBox::StandardButton>(confirmationDialog.result());
 
@@ -383,17 +386,36 @@ void SendCoinsDialog::on_sendButton_clicked()
         return;
     }
 
-    // now send the prepared transaction
-    WalletModel::SendCoinsReturn sendStatus = model->sendCoins(currentTransaction);
-    // process sendStatus and on error generate message shown to user
-    processSendCoinsReturn(sendStatus);
+    bool done = false;
+    if (model->privateKeysDisabled()) {
+        done = true;
+        CMutableTransaction mtx = CMutableTransaction{*(currentTransaction.getWtx())};
+        PartiallySignedTransaction psbtx(mtx);
+        bool complete = false;
+        const TransactionError err = model->wallet().fillPSBT(psbtx, complete, SIGHASH_ALL, false, true);
+        assert(!complete);
+        assert(err == TransactionError::OK);
+        // Serialize the PSBT
+        CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+        ssTx << psbtx;
+        GUIUtil::setClipboard(EncodeBase64(ssTx.str()).c_str());
+        Q_EMIT message(tr("PSBT copied"), "Copied to clipbboard", CClientUIInterface::MSG_INFORMATION);
+    } else {
+        // now send the prepared transaction
+        WalletModel::SendCoinsReturn sendStatus = model->sendCoins(currentTransaction);
+        // process sendStatus and on error generate message shown to user
+        processSendCoinsReturn(sendStatus);
 
-    if (sendStatus.status == WalletModel::OK)
-    {
+        if (sendStatus.status == WalletModel::OK) {
+            done = true;
+            Q_EMIT coinsSent(currentTransaction.getWtx()->GetHash());
+        }
+
+    }
+    if (done) {
         accept();
         CoinControlDialog::coinControl()->UnSelectAll();
         coinControlUpdateLabels();
-        Q_EMIT coinsSent(currentTransaction.getWtx()->GetHash());
     }
     fNewRecipientAllowed = true;
 }

@@ -55,6 +55,7 @@ public Q_SLOTS:
 
 Q_SIGNALS:
     void coinsSent(const uint256& txid);
+    void psbtCopied(const std::string& psbt);
 
 private:
     Ui::SendCoinsDialog *ui;
