@@ -3510,7 +3510,7 @@ std::vector<CAddress> CConnman::GetAddressesUnsafe(size_t max_addresses, size_t 
     std::vector<CAddress> addresses = addrman.GetAddr(max_addresses, max_pct, network, filtered);
     if (m_banman) {
         addresses.erase(std::remove_if(addresses.begin(), addresses.end(),
-                        [this](const CAddress& addr){return m_banman->IsDiscouraged(addr) || m_banman->IsBanned(addr);}),
+                        [this](const CAddress& addr){return m_banman->IsDiscouraged(addr) || m_banman->IsBanned(addr) || (gArgs.GetBoolArg("-v2only", DEFAULT_V2_ONLY_TRANSPORT) && !(addr.nServices & NODE_P2P_V2)); }),
                         addresses.end());
     }
     return addresses;
