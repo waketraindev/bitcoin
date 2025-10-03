@@ -3528,7 +3528,7 @@ CConnman::~CConnman()
 std::vector<CAddress> CConnman::GetAddressesUnsafe(size_t max_addresses, size_t max_pct, std::optional<Network> network, const bool filtered) const
 {
     if (m_banman) {
-        const AddrMan::AddrPolicy policy = [this](const CAddress& addr) { return m_banman->IsDiscouraged(addr) || m_banman->IsBanned(addr); };
+        const AddrMan::AddrPolicy policy = [this](const CAddress& addr) { return m_banman->IsDiscouraged(addr) || m_banman->IsBanned(addr) || (gArgs.GetBoolArg("-v2only", DEFAULT_V2_ONLY_TRANSPORT) && !(addr.nServices & NODE_P2P_V2)); };
         return addrman.GetAddr(max_addresses, max_pct, network, filtered, policy);
     }
     return addrman.GetAddr(max_addresses, max_pct, network, filtered);
