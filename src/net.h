@@ -94,6 +94,7 @@ static const size_t DEFAULT_MAXRECEIVEBUFFER = 5 * 1000;
 static const size_t DEFAULT_MAXSENDBUFFER    = 1 * 1000;
 
 static constexpr bool DEFAULT_V2_TRANSPORT{true};
+static constexpr bool DEFAULT_V2_ONLY_TRANSPORT{false};
 
 typedef int64_t NodeId;
 
