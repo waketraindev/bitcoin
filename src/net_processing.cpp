@@ -1670,9 +1670,11 @@ ServiceFlags PeerManagerImpl::GetDesirableServiceFlags(ServiceFlags services) co
     if (services & NODE_NETWORK_LIMITED) {
         // Limited peers are desirable when we are close to the tip.
         if (ApproximateBestBlockDepth() < NODE_NETWORK_LIMITED_ALLOW_CONN_BLOCKS) {
+            if (m_opts.v2only) return ServiceFlags(NODE_NETWORK_LIMITED | NODE_WITNESS | NODE_P2P_V2);
             return ServiceFlags(NODE_NETWORK_LIMITED | NODE_WITNESS);
         }
     }
+    if (m_opts.v2only) return ServiceFlags(NODE_NETWORK | NODE_WITNESS | NODE_P2P_V2);
     return ServiceFlags(NODE_NETWORK | NODE_WITNESS);
 }
 
@@ -3664,6 +3666,10 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                       pfrom.nVersion.load(), peer->m_starting_height,
                       pfrom.GetId(), pfrom.LogIP(fLogIPs),
                       (mapped_as ? strprintf(", mapped_as=%d", mapped_as) : ""));
+                      if (pfrom.m_transport->GetInfo().transport_type != TransportProtocolType::V2 && m_opts.v2only) {
+                        LogPrintf("Disconnecting peer %u (v1-only, v2 required)\n", pfrom.GetId());
+                        pfrom.fDisconnect = true;
+                      }
         }
 
         if (pfrom.GetCommonVersion() >= SHORT_IDS_BLOCKS_VERSION) {
