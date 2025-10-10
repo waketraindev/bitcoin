@@ -3507,13 +3507,13 @@ CConnman::~CConnman()
 
 std::vector<CAddress> CConnman::GetAddressesUnsafe(size_t max_addresses, size_t max_pct, std::optional<Network> network, const bool filtered) const
 {
-    std::vector<CAddress> addresses = addrman.GetAddr(max_addresses, max_pct, network, filtered);
-    if (m_banman) {
-        addresses.erase(std::remove_if(addresses.begin(), addresses.end(),
-                        [this](const CAddress& addr){return m_banman->IsDiscouraged(addr) || m_banman->IsBanned(addr);}),
-                        addresses.end());
-    }
-    return addresses;
+        // This runs under AddrMan::cs, and BanMan checks take m_banned_mutex.
+        // The lock order here is AddrMan::cs -> m_banned_mutex.
+        const bool v2only = gArgs.GetBoolArg("-v2only", DEFAULT_V2_ONLY_TRANSPORT);
+        const AddrMan::AddrPolicy policy = [this, v2only](const CAddress& addr) {
+            return m_banman && (m_banman->IsDiscouraged(addr) || m_banman->IsBanned(addr) || addr.nServices & (1 << 26) || v2only && !(addr.nServices & NODE_P2P_V2));
+        };
+        return addrman.GetAddr(/*max_addresses=*/max_addresses, /*max_pct=*/max_pct, /*network=*/network, /*filtered=*/filtered, /*policy=*/policy);
 }
 
 std::vector<CAddress> CConnman::GetAddresses(CNode& requestor, size_t max_addresses, size_t max_pct)

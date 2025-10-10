@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 The Bitcoin Core developers
+// Copyright (c) 2016-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -85,18 +85,36 @@ void RPCNestedTests::rpcNestedTests()
     QVERIFY(result == "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
     QVERIFY(filtered == "getblock(getbestblockhash())[tx][0]");
 
+    RPCConsole::RPCParseCommandLine(nullptr, result, "createwallet test true", false, &filtered);
+    QVERIFY(filtered == "!createwallet(…)");
+    RPCConsole::RPCParseCommandLine(nullptr, result, "createwalletdescriptor abc", false, &filtered);
+    QVERIFY(filtered == "!createwalletdescriptor(…)");
+    RPCConsole::RPCParseCommandLine(nullptr, result, "migratewallet abc abc", false, &filtered);
+    QVERIFY(filtered == "!migratewallet(…)");
     RPCConsole::RPCParseCommandLine(nullptr, result, "signmessagewithprivkey abc", false, &filtered);
-    QVERIFY(filtered == "signmessagewithprivkey(…)");
+    QVERIFY(filtered == "!signmessagewithprivkey(…)");
     RPCConsole::RPCParseCommandLine(nullptr, result, "signmessagewithprivkey abc,def", false, &filtered);
-    QVERIFY(filtered == "signmessagewithprivkey(…)");
+    QVERIFY(filtered == "!signmessagewithprivkey(…)");
     RPCConsole::RPCParseCommandLine(nullptr, result, "signrawtransactionwithkey(abc)", false, &filtered);
-    QVERIFY(filtered == "signrawtransactionwithkey(…)");
+    QVERIFY(filtered == "!signrawtransactionwithkey(…)");
     RPCConsole::RPCParseCommandLine(nullptr, result, "walletpassphrase(help())", false, &filtered);
-    QVERIFY(filtered == "walletpassphrase(…)");
+    QVERIFY(filtered == "!walletpassphrase(…)");
     RPCConsole::RPCParseCommandLine(nullptr, result, "walletpassphrasechange(help(walletpassphrasechange(abc)))", false, &filtered);
-    QVERIFY(filtered == "walletpassphrasechange(…)");
+    QVERIFY(filtered == "!walletpassphrasechange(…)");
     RPCConsole::RPCParseCommandLine(nullptr, result, "help(encryptwallet(abc, def))", false, &filtered);
-    QVERIFY(filtered == "help(encryptwallet(…))");
+    QVERIFY(filtered == "!help(encryptwallet(…))");
+
+    // Test filtering for sensitive commands
+    RPCConsole::RPCParseCommandLine(nullptr, result, "send abc abc", false, &filtered);
+    QVERIFY(filtered == "!send abc abc");
+    RPCConsole::RPCParseCommandLine(nullptr, result, "sendall abc abc", false, &filtered);
+    QVERIFY(filtered == "!sendall abc abc");
+    RPCConsole::RPCParseCommandLine(nullptr, result, "sendmany abc abc", false, &filtered);
+    QVERIFY(filtered == "!sendmany abc abc");
+    RPCConsole::RPCParseCommandLine(nullptr, result, "sendtoaddress abc abc", false, &filtered);
+    QVERIFY(filtered == "!sendtoaddress abc abc");
+    RPCConsole::RPCParseCommandLine(nullptr, result, "# comment code", false, &filtered);
+    QVERIFY(filtered == "# comment code");
 
     RPCConsole::RPCExecuteCommandLine(m_node, result, "rpcNestedTest");
     QVERIFY(result == "[]");
