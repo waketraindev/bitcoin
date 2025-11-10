@@ -64,6 +64,7 @@ const struct {
     {"cmd-request", ":/icons/tx_input"},
     {"cmd-reply", ":/icons/tx_output"},
     {"cmd-error", ":/icons/tx_output"},
+    {"cmd-comment", ":icons/hashtag"}, // Temporary icon
     {"misc", ":/icons/tx_inout"},
     {nullptr, nullptr}
 };
@@ -82,6 +83,11 @@ const QStringList historyFilter = QStringList()
     << "encryptwallet";
 
 }
+
+// List of commands that may cause unintended effects if accidentally re-executed from history
+const QStringList sensitiveFilter = QStringList()
+    << "sendtoaddress"
+;
 
 /* Object for executing console RPC commands in a separate thread.
 */
@@ -361,6 +367,23 @@ bool RPCConsole::RPCParseCommandLine(interfaces::Node* node, std::string &strRes
         for (auto i = filter_ranges.rbegin(); i != filter_ranges.rend(); ++i) {
             pstrFilteredOut->replace(i->first, i->second - i->first, "(…)");
         }
+
+        bool is_sensitive = !filter_ranges.empty();
+
+        if (!is_sensitive) {
+            const QString strcmd = QString::fromStdString(*pstrFilteredOut);
+            for (const QString& val : sensitiveFilter) {
+                if (strcmd.contains(val, Qt::CaseInsensitive)) {
+                    is_sensitive = true;
+                    break;
+                }
+            }
+        }
+
+        // Prefix "!" to mark sensitive commands as non-executable when recalled from history
+        if (is_sensitive) {
+            pstrFilteredOut->insert(0, 1, '!');
+        }
     }
     switch(state) // final state
     {
@@ -405,7 +428,11 @@ void RPCExecutor::request(const QString &command, const QString& wallet_name)
                 "   example:    getblock(getblockhash(0) 1)[tx]\n\n"
 
                 "Results without keys can be queried with an integer in brackets using the parenthesized syntax.\n"
-                "   example:    getblock(getblockhash(0),1)[tx][0]\n\n")));
+                "   example:    getblock(getblockhash(0),1)[tx][0]\n\n"
+
+                "Commands starting with a leading '!' are blocked from execution.\n"
+                "These entries are shown for reference only. Remove the '!' or retype to run them.\n"
+                "   example:    !walletpassphrase(...)\n\n")));
             return;
         }
         if (!RPCConsole::RPCExecuteCommandLine(m_node, result, executableCommand, nullptr, wallet_name)) {
@@ -787,6 +814,7 @@ static QString categoryClass(int category)
     case RPCConsole::CMD_REQUEST:  return "cmd-request"; break;
     case RPCConsole::CMD_REPLY:    return "cmd-reply"; break;
     case RPCConsole::CMD_ERROR:    return "cmd-error"; break;
+    case RPCConsole::CMD_COMMENT:   return "cmd-comment"; break;
     default:                       return "misc";
     }
 }
@@ -855,6 +883,7 @@ void RPCConsole::clear(bool keep_prompt)
                 "td.message { font-family: %1; font-size: %2; white-space:pre-wrap; } "
                 "td.cmd-request { color: #006060; } "
                 "td.cmd-error { color: red; } "
+                "td.cmd-comment { color: green; }"
                 ".secwarning { color: red; }"
                 "b { color: #006060; } "
             ).arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
@@ -992,6 +1021,22 @@ void RPCConsole::on_lineEdit_returnPressed()
 
     if (cmd.isEmpty()) {
         return;
+    }
+
+    const QChar cmd_prefix = cmd.at(0);
+    switch (cmd_prefix.toLatin1()) {
+        case '!':
+            QMessageBox::information(this, tr("Command not executed"), tr(
+                "Commands prefixed with '!' are blocked.\n"
+                "Remove the '!' or retype to run again."
+            ));
+            return;
+        case '#':
+            ui->lineEdit->clear();
+            message(CMD_COMMENT, cmd);
+            return;
+        default:
+            break;
     }
 
     std::string strFilteredCmd;
