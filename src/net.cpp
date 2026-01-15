@@ -3372,6 +3372,17 @@ void CConnman::SetNetworkActive(bool active)
     if (fNetworkActive == active) {
         return;
     }
+    // Save anchors to `m_anchors` in case of reconnection or shutdown.
+    if (fNetworkActive && !active) {
+        std::vector<CAddress> anchors_to_save = GetCurrentBlockRelayOnlyConns();
+        if (anchors_to_save.size() > MAX_BLOCK_RELAY_ONLY_ANCHORS) {
+            anchors_to_save.resize(MAX_BLOCK_RELAY_ONLY_ANCHORS);
+        }
+        if (m_anchors.empty() && !anchors_to_save.empty()) {
+            m_anchors = anchors_to_save;
+            LogInfo("Saved %zu block-relay-only anchors for reconnection.", m_anchors.size());
+        }
+    }
 
     fNetworkActive = active;
 
