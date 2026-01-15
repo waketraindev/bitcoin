@@ -57,6 +57,10 @@ class AnchorsTest(BitcoinTestFramework):
             else:
                 inbound_nodes_port.append(hex(int(addr_split[1]))[2:])
 
+        # Test that anchors are saved when network is set inactive
+        with self.nodes[0].assert_debug_log(["Saved 2 block-relay-only anchors for reconnection."]):
+            self.nodes[0].setnetworkactive(False)
+
         self.log.debug("Stop node")
         self.stop_node(0)
 
@@ -136,6 +140,9 @@ class AnchorsTest(BitcoinTestFramework):
             new_data[services_index] = P2P_SERVICES
             new_data_hash = hash256(new_data)
             file_handler.write(new_data + new_data_hash)
+
+        self.restart_node(0, extra_args=["-networkactive=0"])
+        self.stop_node(0)
 
         self.log.info("Restarting node attempts to reconnect to anchors")
         with self.nodes[0].assert_debug_log([f"Trying to make an anchor connection to {ONION_ADDR}"]):
