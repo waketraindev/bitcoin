@@ -3655,6 +3655,10 @@ void CConnman::StopNodes()
         if (m_use_addrman_outgoing) {
             // Anchor connections are only dumped during clean shutdown.
             std::vector<CAddress> anchors_to_dump = GetCurrentBlockRelayOnlyConns();
+            // No active connections, attempt to dump already read anchors.
+            if (anchors_to_dump.empty()) {
+                anchors_to_dump = m_anchors; // Fall back to m_anchors
+            }
             if (anchors_to_dump.size() > MAX_BLOCK_RELAY_ONLY_ANCHORS) {
                 anchors_to_dump.resize(MAX_BLOCK_RELAY_ONLY_ANCHORS);
             }
