@@ -2725,7 +2725,8 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect, std
         // block-relay-only peer (to confirm our tip is current, see below) or the next_feeler
         // timer to decide if we should open a FEELER.
 
-        if (!m_anchors.empty() && (nOutboundBlockRelay < m_max_outbound_block_relay)) {
+        bool has_anchors = WITH_LOCK(m_anchors_mutex, return !m_anchors.empty());
+        if (has_anchors && (nOutboundBlockRelay < m_max_outbound_block_relay)) {
             conn_type = ConnectionType::BLOCK_RELAY;
             anchor = true;
         } else if (nOutboundFullRelay < m_max_outbound_full_relay) {
@@ -2786,9 +2787,15 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect, std
 
         while (!m_interrupt_net->interrupted()) {
             // Don't pop back anchors unless network is active
-            if (fNetworkActive && anchor && !m_anchors.empty()) {
-                const CAddress addr = m_anchors.back();
-                m_anchors.pop_back();
+            if (fNetworkActive && anchor) {
+                CAddress addr;
+                bool has_anchors = WITH_LOCK(m_anchors_mutex, {
+                    if (m_anchors.empty()) return false;
+                    addr = std::move(m_anchors.back());
+                    m_anchors.pop_back();
+                    return true;
+                });
+                if (!has_anchors) break; // Break if m_anchors is empty
                 if (!addr.IsValid() || IsLocal(addr) || !g_reachable_nets.Contains(addr) ||
                     !m_msgproc->HasAllDesirableServiceFlags(addr.nServices) ||
                     outbound_ipv46_peer_netgroups.contains(m_netgroupman.GetGroup(addr))) continue;
@@ -3384,9 +3391,9 @@ void CConnman::SetNetworkActive(bool active)
     if (fNetworkActive && !active) {
         std::vector<CAddress> anchors_to_save = GetCurrentBlockRelayOnlyConns();
         TruncateVectorTo(anchors_to_save, MAX_BLOCK_RELAY_ONLY_ANCHORS);
-        if (m_anchors.empty() && !anchors_to_save.empty()) {
-            m_anchors = anchors_to_save;
-            LogInfo("Saved %zu block-relay-only anchors for reconnection.", m_anchors.size());
+        if (!anchors_to_save.empty()) {
+            WITH_LOCK(m_anchors_mutex, m_anchors = anchors_to_save);
+            LogInfo("Saved %zu block-relay-only anchors for reconnection.", anchors_to_save.size());
         }
     }
 
@@ -3515,9 +3522,11 @@ bool CConnman::Start(CScheduler& scheduler, const Options& connOptions)
 
     if (m_use_addrman_outgoing) {
         // Load addresses from anchors.dat
-        m_anchors = ReadAnchors(gArgs.GetDataDirNet() / ANCHORS_DATABASE_FILENAME);
-        TruncateVectorTo(m_anchors, MAX_BLOCK_RELAY_ONLY_ANCHORS);
-        LogInfo("%i block-relay-only anchors will be tried for connections.\n", m_anchors.size());
+        WITH_LOCK(m_anchors_mutex, {
+            m_anchors = ReadAnchors(gArgs.GetDataDirNet() / ANCHORS_DATABASE_FILENAME);
+            TruncateVectorTo(m_anchors, MAX_BLOCK_RELAY_ONLY_ANCHORS);
+            LogInfo("%i block-relay-only anchors will be tried for connections.\n", m_anchors.size());
+        });
     }
 
     if (m_client_interface) {
@@ -3672,7 +3681,7 @@ void CConnman::StopNodes()
             std::vector<CAddress> anchors_to_dump = GetCurrentBlockRelayOnlyConns();
             // No active connections, attempt to dump already read anchors.
             if (anchors_to_dump.empty()) {
-                anchors_to_dump = m_anchors; // Fall back to m_anchors
+                WITH_LOCK(m_anchors_mutex, anchors_to_dump = m_anchors); // Fall back to m_anchors
             }
             TruncateVectorTo(anchors_to_dump, MAX_BLOCK_RELAY_ONLY_ANCHORS);
             DumpAnchors(gArgs.GetDataDirNet() / ANCHORS_DATABASE_FILENAME, anchors_to_dump);
