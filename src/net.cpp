@@ -2788,7 +2788,7 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect, std
 
         while (!interruptNet)
         {
-            if (anchor && !m_anchors.empty()) {
+            if (fNetworkActive && anchor && !m_anchors.empty()) {
                 const CAddress addr = m_anchors.back();
                 m_anchors.pop_back();
                 if (!addr.IsValid() || IsLocal(addr) || !g_reachable_nets.Contains(addr) ||
@@ -3229,6 +3229,17 @@ void CConnman::SetNetworkActive(bool active)
         return;
     }
 
+    if (fNetworkActive && !active) {
+        std::vector<CAddress> anchors_to_save = GetCurrentBlockRelayOnlyConns();
+        if (anchors_to_save.size() > MAX_BLOCK_RELAY_ONLY_ANCHORS) {
+            anchors_to_save.resize(MAX_BLOCK_RELAY_ONLY_ANCHORS);
+        }
+        if (m_anchors.empty() && !anchors_to_save.empty()) {
+            m_anchors = anchors_to_save;
+            LogInfo("Saved %d anchors for reconnection attempts.", m_anchors.size());
+        }
+    }
+
     fNetworkActive = active;
 
     if (m_client_interface) {
@@ -3491,7 +3502,11 @@ void CConnman::StopNodes()
 
         if (m_use_addrman_outgoing) {
             // Anchor connections are only dumped during clean shutdown.
-            std::vector<CAddress> anchors_to_dump = GetCurrentBlockRelayOnlyConns();
+            std::vector<CAddress> anchors_to_dump{GetCurrentBlockRelayOnlyConns()};
+            // No active connections, attempt to dump already read anchors.
+            if (anchors_to_dump.empty()) {
+                anchors_to_dump = m_anchors; // Fall back to m_anchors
+            }
             if (anchors_to_dump.size() > MAX_BLOCK_RELAY_ONLY_ANCHORS) {
                 anchors_to_dump.resize(MAX_BLOCK_RELAY_ONLY_ANCHORS);
             }
