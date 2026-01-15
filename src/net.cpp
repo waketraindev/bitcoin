@@ -3365,6 +3365,14 @@ void Discover()
     }
 }
 
+bool TruncateVectorTo(std::vector<CAddress>& vector, size_t count) {
+    if (vector.size() > count) {
+        vector.resize(count);
+        return true;
+    }
+    return false;
+}
+
 void CConnman::SetNetworkActive(bool active)
 {
     LogInfo("%s: %s\n", __func__, active);
@@ -3375,9 +3383,7 @@ void CConnman::SetNetworkActive(bool active)
     // Save anchors to `m_anchors` in case of reconnection or shutdown.
     if (fNetworkActive && !active) {
         std::vector<CAddress> anchors_to_save = GetCurrentBlockRelayOnlyConns();
-        if (anchors_to_save.size() > MAX_BLOCK_RELAY_ONLY_ANCHORS) {
-            anchors_to_save.resize(MAX_BLOCK_RELAY_ONLY_ANCHORS);
-        }
+        TruncateVectorTo(anchors_to_save, MAX_BLOCK_RELAY_ONLY_ANCHORS);
         if (m_anchors.empty() && !anchors_to_save.empty()) {
             m_anchors = anchors_to_save;
             LogInfo("Saved %zu block-relay-only anchors for reconnection.", m_anchors.size());
@@ -3510,9 +3516,7 @@ bool CConnman::Start(CScheduler& scheduler, const Options& connOptions)
     if (m_use_addrman_outgoing) {
         // Load addresses from anchors.dat
         m_anchors = ReadAnchors(gArgs.GetDataDirNet() / ANCHORS_DATABASE_FILENAME);
-        if (m_anchors.size() > MAX_BLOCK_RELAY_ONLY_ANCHORS) {
-            m_anchors.resize(MAX_BLOCK_RELAY_ONLY_ANCHORS);
-        }
+        TruncateVectorTo(m_anchors, MAX_BLOCK_RELAY_ONLY_ANCHORS);
         LogInfo("%i block-relay-only anchors will be tried for connections.\n", m_anchors.size());
     }
 
@@ -3670,9 +3674,7 @@ void CConnman::StopNodes()
             if (anchors_to_dump.empty()) {
                 anchors_to_dump = m_anchors; // Fall back to m_anchors
             }
-            if (anchors_to_dump.size() > MAX_BLOCK_RELAY_ONLY_ANCHORS) {
-                anchors_to_dump.resize(MAX_BLOCK_RELAY_ONLY_ANCHORS);
-            }
+            TruncateVectorTo(anchors_to_dump, MAX_BLOCK_RELAY_ONLY_ANCHORS);
             DumpAnchors(gArgs.GetDataDirNet() / ANCHORS_DATABASE_FILENAME, anchors_to_dump);
         }
     }
