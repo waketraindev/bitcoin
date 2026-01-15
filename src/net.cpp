@@ -2785,7 +2785,8 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect, std
         const auto reachable_nets{g_reachable_nets.All()};
 
         while (!m_interrupt_net->interrupted()) {
-            if (anchor && !m_anchors.empty()) {
+            // Don't pop back anchors unless network is active
+            if (fNetworkActive && anchor && !m_anchors.empty()) {
                 const CAddress addr = m_anchors.back();
                 m_anchors.pop_back();
                 if (!addr.IsValid() || IsLocal(addr) || !g_reachable_nets.Contains(addr) ||
